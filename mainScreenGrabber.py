@@ -10,9 +10,19 @@ import numpy as np
 from ahk import AHK
 from pynput.keyboard import Key, Listener
 import _thread
+from win32 import win32gui
+from pythonwin import win32ui
+from win32.lib import win32con
+from win32 import win32api
 
+#globals
 count = 0
 ahk = AHK(executable_path="F:\\Program Files\\AutoHotkey\\AutoHotkey.exe")
+width = 600
+height = 800
+top = 300
+left = 370
+hwin = win32gui.GetDesktopWindow()
 
 shootActive = False
 
@@ -56,14 +66,38 @@ def predict(img):
     result = clf_svm.predict_proba(feature_set)
     return result
 
+def grab_screen():
+
+    hwindc = win32gui.GetWindowDC(hwin)
+
+
+
+    srcdc = win32ui.CreateDCFromHandle(hwindc)
+    memdc = srcdc.CreateCompatibleDC()
+    bmp = win32ui.CreateBitmap()
+    bmp.CreateCompatibleBitmap(srcdc, width, height)
+    memdc.SelectObject(bmp)
+    memdc.BitBlt((0, 0), (width, height), srcdc, (left, top), win32con.SRCCOPY)
+    
+    signedIntsArray = bmp.GetBitmapBits(True)
+    img = np.fromstring(signedIntsArray, dtype='uint8')
+    img.shape = (height,width,4)
+
+    srcdc.DeleteDC()
+    memdc.DeleteDC()
+    win32gui.ReleaseDC(hwin, hwindc)
+    win32gui.DeleteObject(bmp.GetHandle())
+
+    return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+
 
 def main():
     monitor = {"top": 300, "left": 370, "width": 60, "height": 60}
     with mss() as sct:
-        start = time.time()
         #for i in range(30):
         while True:
-            img = np.array(sct.grab(monitor))
+            img = grab_screen()
+            #img = np.array(sct.grab(monitor))
             cv2.imshow("OpenCV/Numpy normal", img)
             if cv2.waitKey(25) & 0xFF == ord("q"):
                 cv2.destroyAllWindows()
@@ -83,6 +117,25 @@ def addKeyboardListener():
         on_press=on_press) as listener:
         listener.join()
 
+def performance_comparisson():
+    with mss() as sct:
+        monitor = {"top": 300, "left": 370, "width": 600, "height": 800}
+        print('Sct grab: ')
+        start = time.time()
+        for i in range(30):
+            img = np.array(sct.grab(monitor))
+        end = time.time()
+        print('Time: ' + str(end - start))
+    print('PyWin32: ')
+    start = time.time()
+    for i in range(30):
+        img = grab_screen()
+    end = time.time()
+    print('Time: ' + str(end - start))
+
+
 if __name__ == '__main__':
-    _thread.start_new_thread(addKeyboardListener, ())
-    main()
+    #_thread.start_new_thread(addKeyboardListener, ())
+    #main()
+    performance_comparisson()
+
