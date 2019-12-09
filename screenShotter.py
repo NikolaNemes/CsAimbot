@@ -6,14 +6,17 @@ from scipy.misc import imsave, imread
 from os import listdir
 import math
 
-path = '../ImagesCloseup/'
+path = '../ImagesMiddle/'
 files = [int(''.join(filter(str.isdigit, f))) for f in listdir(path)]
-monitor = {"top": 270, "left": 340, "width": 120, "height": 120}
+monitor = {"top": 300, "left": 370, "width": 60, "height": 60}
 img = numpy.empty(3)
 saveReady = False
 prefix = 'pos'
 sct = mss()
-img_num = max(files) + 1
+img_num = 1
+if not len(files) == 0:
+    img_num += max(files)
+
 def on_press(key):
     global saveReady
     global prefix
