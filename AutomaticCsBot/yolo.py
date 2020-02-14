@@ -27,7 +27,7 @@ import json
 
 monitor = {"top": 28, "left": 0, "width": 800, "height": 600}
 
-shouldShoot = True
+shotCounter = 0
 
 verticalDict = {}
 horizontalDict = {}
@@ -46,13 +46,15 @@ def centerDistance(box):
     return math.sqrt((center[0] - 400)**2 + (center[1] - 300)**2)
 
 def aim_at_box(box):
+    global shotCounter
     top, left, bottom, right = box
 
-    # if top < 300 and bottom > 300 and left < 400 and right > 400:
-    #     pyautogui.click()
-    #     return
+    if top < 300 and bottom > 300 and left < 400 and right > 400:
+        pyautogui.click()
+        shotCounter += 1
+        return
 
-    center = ((left + right) // 2, top + (bottom - top) // 100 * 25)
+    center = ((left + right) // 2, top + (bottom - top) // 100 * 40)
     dx = int(center[0] - 400)
     dy = int(center[1] - 300)
     dxresult = 0
@@ -69,6 +71,7 @@ def aim_at_box(box):
 
     pyautogui.move(dxresult, dyresult)
     pyautogui.click()
+    shotCounter += 1
 
 
 
@@ -188,7 +191,7 @@ class YOLO(object):
         classIndex = 0
         predicted_class = self.class_names[classIndex]
 
-        if len(out_boxes) != 0:
+        if len(out_boxes) != 0 and shotCounter < 5:
             box = min(out_boxes, key=centerDistance)
             aim_at_box(box)
   
@@ -234,6 +237,7 @@ class YOLO(object):
 def detect_video(yolo):
     import cv2
     accum_time = 0
+    shot_accum_time = 0
     curr_fps = 0
     fps = "FPS: ??"
     prev_time = timer()
@@ -248,7 +252,12 @@ def detect_video(yolo):
             exec_time = curr_time - prev_time
             prev_time = curr_time
             accum_time = accum_time + exec_time
+            shot_accum_time += exec_time
             curr_fps = curr_fps + 1
+            if shot_accum_time > 0.5:
+                global shotCounter
+                shotCounter = 0
+                shot_accum_time = 0
             if accum_time > 1:
                 accum_time = accum_time - 1
                 fps = "FPS: " + str(curr_fps)
