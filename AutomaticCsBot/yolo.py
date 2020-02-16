@@ -22,7 +22,6 @@ import math
 
 from mss import mss
 import pyautogui
-from sklearn.svm import SVC # SVM klasifikator
 import joblib
 import _thread
 from pynput.keyboard import Key, Listener
@@ -30,7 +29,6 @@ from pynput.keyboard import Key, Listener
 import json
 
 monitor = {"top": 28, "left": 0, "width": 800, "height": 600}
-svm_model = None
 shotCounter = 0
 verticalDict = {}
 horizontalDict = {}
@@ -270,13 +268,8 @@ class YOLO(object):
         self.sess.close()
 
 
-def load_svm_classifier():
-    return joblib.load('model_data/svm.joblib')
-
 def detect_video(yolo):
     import cv2
-    global svm_model
-    svm_model = load_svm_classifier()
     _thread.start_new_thread(addKeyboardListener, ())
     accum_time = 0
     shot_accum_time = 0
