@@ -22,15 +22,19 @@ import math
 
 from mss import mss
 import pyautogui
+from sklearn.svm import SVC # SVM klasifikator
+import joblib
+import _thread
+from pynput.keyboard import Key, Listener
 
 import json
 
 monitor = {"top": 28, "left": 0, "width": 800, "height": 600}
-
+svm_model = None
 shotCounter = 0
-
 verticalDict = {}
 horizontalDict = {}
+shootActive = False
 
 with open('MouseDicts/horizontalCorrected.json', 'r') as fp: 
     horizontalDict = json.load(fp)
@@ -54,7 +58,7 @@ def aim_at_box(box):
         shotCounter += 1
         return
 
-    center = ((left + right) // 2, top + (bottom - top) // 100 * 40)
+    center = ((left + right) // 2, top + (bottom - top) // 100 * 65)
     dx = int(center[0] - 400)
     dy = int(center[1] - 300)
     dxresult = 0
@@ -67,12 +71,30 @@ def aim_at_box(box):
         dyresult = verticalDict[str(dy)]
     else:
         dyresult = - verticalDict[str(-dy)]
-
-
+    print(top, bottom)
+    print(left, right)
+    print("-------------")
+    
     pyautogui.move(dxresult, dyresult)
+    time.sleep(0.05)
     pyautogui.click()
     shotCounter += 1
 
+def addKeyboardListener():
+    with Listener(
+        on_press=on_press) as listener:
+        listener.join()
+
+def on_press(key):
+    global shootActive
+    if key == Key.home:
+        shootActive = not shootActive
+        print('ShootActive: ' + str(shootActive))
+
+def reshape_data(img_feature_set):
+    nsamples = 1
+    nx, ny, channels = img_feature_set.shape
+    return img_feature_set.reshape((nsamples, nx*ny*channels))[0]
 
 
 class YOLO(object):
@@ -82,7 +104,7 @@ class YOLO(object):
         "classes_path": 'model_data/counterstrikeclasses.txt',
         "score" : 0.3,
         "iou" : 0.45,
-        "model_image_size" : (416, 416),
+        "model_image_size" : (608, 800),
         "gpu_num" : 1,
     }
 
@@ -156,20 +178,23 @@ class YOLO(object):
         return boxes, scores, classes
 
 
+
     def detect_image(self, image):
         start = timer()
 
         if self.model_image_size != (None, None):
             assert self.model_image_size[0]%32 == 0, 'Multiples of 32 required'
             assert self.model_image_size[1]%32 == 0, 'Multiples of 32 required'
+            # boxed_image = image
             boxed_image = letterbox_image(image, tuple(reversed(self.model_image_size)))
         else:
             new_image_size = (image.width - (image.width % 32),
                               image.height - (image.height % 32))
+            # boxed_image = image
             boxed_image = letterbox_image(image, new_image_size)
         image_data = np.array(boxed_image, dtype='float32')
 
-        print(image_data.shape)
+        # print(image_data.shape)
         image_data /= 255.
         image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
 
@@ -181,25 +206,29 @@ class YOLO(object):
                 K.learning_phase(): 0
             })
 
-        print('Found {} boxes for {}'.format(len(out_boxes), 'img'))
+        # print('Found {} boxes for {}'.format(len(out_boxes), 'img'))
 
         font = ImageFont.truetype(font='font/FiraMono-Medium.otf',
                     size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
         thickness = (image.size[0] + image.size[1]) // 300
 
-        
         classIndex = 0
-        predicted_class = self.class_names[classIndex]
+        labels = ['sass', 'leet']
 
-        if len(out_boxes) != 0 and shotCounter < 5:
-            box = min(out_boxes, key=centerDistance)
-            aim_at_box(box)
-  
+        terrorists_boxes = []
+        if shootActive:
+            for i in range(len(out_boxes)):
+                if labels[out_classes[i]] == 'leet':
+                    terrorists_boxes.append((out_boxes[i], out_classes[i]))
+
+            if len(terrorists_boxes) != 0 and shotCounter < 3:
+                box = max(terrorists_boxes, key=lambda x: x[1])[0]
+                aim_at_box(box)
+
         for i in range(len(out_boxes)): 
-
             box = out_boxes[i]
             score = out_scores[i]
-
+            predicted_class = labels[out_classes[i]]
             label = '{} {:.2f}'.format(predicted_class, score)
             draw = ImageDraw.Draw(image)
             label_size = draw.textsize(label, font)
@@ -209,7 +238,7 @@ class YOLO(object):
             left = max(0, np.floor(left + 0.5).astype('int32'))
             bottom = min(image.size[1], np.floor(bottom + 0.5).astype('int32'))
             right = min(image.size[0], np.floor(right + 0.5).astype('int32'))
-            print(label, (left, top), (right, bottom))
+            # print(label, (left, top), (right, bottom))
 
             if top - label_size[1] >= 0:
                 text_origin = np.array([left, top - label_size[1]])
@@ -221,6 +250,12 @@ class YOLO(object):
                 draw.rectangle(
                     [left + i, top + i, right - i, bottom - i],
                    outline=self.colors[classIndex])
+                draw.rectangle(
+                    [left + i + (right - left)//2, top + i + (bottom - top) // 2, right - i - (right - left) // 2, bottom - i - (bottom - top) // 2], outline=self.colors[classIndex]
+                )
+                draw.rectangle(
+                    [397, 297, 403, 303], outline=self.colors[classIndex]
+                )
             draw.rectangle(
                 [tuple(text_origin), tuple(text_origin + label_size)],
                 fill=self.colors[classIndex])
@@ -228,14 +263,21 @@ class YOLO(object):
             del draw
 
         end = timer()
-        print(end - start)
+        # print(end - start)
         return image
 
     def close_session(self):
         self.sess.close()
 
+
+def load_svm_classifier():
+    return joblib.load('model_data/svm.joblib')
+
 def detect_video(yolo):
     import cv2
+    global svm_model
+    svm_model = load_svm_classifier()
+    _thread.start_new_thread(addKeyboardListener, ())
     accum_time = 0
     shot_accum_time = 0
     curr_fps = 0
@@ -244,8 +286,10 @@ def detect_video(yolo):
     pyautogui.PAUSE = 0
     while True:
         with mss() as sct:
-            frame = np.array(sct.grab(monitor))
-            image = Image.fromarray(frame)
+            frame = sct.grab(monitor)
+            image = Image.frombytes("RGB", frame.size, frame.bgra, "raw", "BGRX")
+            # frame = np.array(sct.grab(monitor))
+            # image = Image.fromarray(frame)
             image = yolo.detect_image(image)
             result = np.asarray(image)
             curr_time = timer()
@@ -260,10 +304,10 @@ def detect_video(yolo):
                 shot_accum_time = 0
             if accum_time > 1:
                 accum_time = accum_time - 1
-                fps = "FPS: " + str(curr_fps)
+                fps = "FPS: " + str(curr_fps) + (' ' + 'SHOOTING: ON' if shootActive else 'SHOOTING: OFF')
                 curr_fps = 0
             cv2.putText(result, text=fps, org=(3, 15), fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        fontScale=0.50, color=(255, 0, 0), thickness=2)
+                        fontScale=0.50, color=(24, 240, 28), thickness=2)
             cv2.namedWindow("result", cv2.WINDOW_NORMAL)
             cv2.imshow("result", result)
             if cv2.waitKey(1) & 0xFF == ord('q'):
