@@ -247,12 +247,13 @@ def calculateResults(image_details_ground_truth, out_boxes, out_classes, out_sco
                     continue
                 ground_truth_out_box = image_details_ground_truth_class[1][j]
                 all_ious.append(calc_iou(ground_truth_out_box, out_box))
-            max_iou = max(all_ious)
-            if max_iou > 0.5:
-                results['true_pos'] = results['true_pos'] + 1
-                found_ground_truth_boxes[all_ious.index(max_iou)] = True
-            else:
-                results['false_pos'] = results['false_neg'] + 1
+            if len(all_ious) > 0:
+                max_iou = max(all_ious)
+                if max_iou > 0.5:
+                    results['true_pos'] = results['true_pos'] + 1
+                    found_ground_truth_boxes[all_ious.index(max_iou)] = True
+                else:
+                    results['false_pos'] = results['false_neg'] + 1
     false_negs = 0
     for found in found_ground_truth_boxes:
         if not found:
