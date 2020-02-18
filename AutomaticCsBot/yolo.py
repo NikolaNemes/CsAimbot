@@ -217,10 +217,12 @@ class YOLO(object):
         if shootActive:
             for i in range(len(out_boxes)):
                 if labels[out_classes[i]] == 'leet':
-                    terrorists_boxes.append((out_boxes[i], out_classes[i]))
+                    # terrorists_boxes.append((out_boxes[i], out_classes[i]))
+                    terrorists_boxes.append(out_boxes[i])
 
-            if len(terrorists_boxes) != 0 and shotCounter < 3:
-                box = max(terrorists_boxes, key=lambda x: x[1])[0]
+            if len(terrorists_boxes) != 0 and shotCounter < 4:
+                box = min(terrorists_boxes, key=centerDistance)
+                # box = max(terrorists_boxes, key=lambda x: x[1])[0]
                 aim_at_box(box)
 
         for i in range(len(out_boxes)): 
@@ -284,7 +286,7 @@ def detect_video(yolo):
             # frame = np.array(sct.grab(monitor))
             # image = Image.fromarray(frame)
             image = yolo.detect_image(image)
-            result = np.asarray(image)
+            result = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
             curr_time = timer()
             exec_time = curr_time - prev_time
             prev_time = curr_time
@@ -297,10 +299,10 @@ def detect_video(yolo):
                 shot_accum_time = 0
             if accum_time > 1:
                 accum_time = accum_time - 1
-                fps = "FPS: " + str(curr_fps) + (' ' + 'SHOOTING: ON' if shootActive else 'SHOOTING: OFF')
+                fps = "FPS: " + str(curr_fps) + (' ' + ('SHOOTING: ON' if shootActive else 'SHOOTING: OFF'))
                 curr_fps = 0
             cv2.putText(result, text=fps, org=(3, 15), fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        fontScale=0.50, color=(24, 240, 28), thickness=2)
+                        fontScale=0.50, color=(0, 0, 0), thickness=2)
             cv2.namedWindow("result", cv2.WINDOW_NORMAL)
             cv2.imshow("result", result)
             if cv2.waitKey(1) & 0xFF == ord('q'):
