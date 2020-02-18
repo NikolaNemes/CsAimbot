@@ -226,27 +226,134 @@ def calc_iou( gt_bbox, pred_bbox):
 
 #image details - image path, list of annotated boxes, list of classes for those boxes
 #out_boxes, out_classes, out_scores - yolo results for this image
-def calculateResults(image_details_ground_truth, out_boxes, out_classes, out_scores):
-    results = []
+#target class - 
+#output - img-id -> truepos, falsepos, falseneg
+def calculateResults(image_details_ground_truth, out_boxes, out_classes, out_scores, target_class):
+    image_details_ground_truth_class = [image_details_ground_truth[0], [], []]
+    for i in range(len(image_details_ground_truth[2])):
+        if image_details_ground_truth[2][i] == target_class:
+            image_details_ground_truth_class[1].append(image_details_ground_truth[1][i])
+            image_details_ground_truth_class[2].append(image_details_ground_truth[2][i])
+
+    results = {'true_pos': 0, 'false_pos': 0, 'false_neg': 0}
+    found_ground_truth_boxes = [False for i in range(len(image_details_ground_truth_class[1]))]
     for i in range(0, len(out_boxes)):
-        out_box = out_boxes[i]
-        all_ious = []
-        for j in range(0, len(image_details_ground_truth[1])):
-            ground_truth_out_box = image_details_ground_truth[1][j]
-            all_ious.append(calc_iou(ground_truth_out_box, out_box))
-        print(max(all_ious))
+        if out_classes[i] == target_class:
+            out_box = out_boxes[i]
+            all_ious = []
+            for j in range(0, len(image_details_ground_truth_class[1])):
+                if (found_ground_truth_boxes[j] == True):
+                    all_ious.append(-1)
+                    continue
+                ground_truth_out_box = image_details_ground_truth_class[1][j]
+                all_ious.append(calc_iou(ground_truth_out_box, out_box))
+            max_iou = max(all_ious)
+            if max_iou > 0.5:
+                results['true_pos'] = results['true_pos'] + 1
+                found_ground_truth_boxes[all_ious.index(max_iou)] = True
+            else:
+                results['false_pos'] = results['false_neg'] + 1
+    false_negs = 0
+    for found in found_ground_truth_boxes:
+        if not found:
+            false_negs += 1
+    results['false_neg'] = false_negs
+    return results
+
+def calc_precision_recall(image_results):
+    """Calculates precision and recall from the set of images
+    Args:
+        img_results (dict): dictionary formatted like:
+            {
+                'img_id1': {'true_pos': int, 'false_pos': int, 'false_neg': int},
+                'img_id2': ...
+                ...
+            }
+    Returns:
+        tuple: of floats of (precision, recall)
+    """
+    true_positive=0
+    false_positive=0
+    false_negative=0
+    for img_id, res in image_results.items():
+        true_positive +=res['true_pos']
+        false_positive += res['false_pos']
+        false_negative += res['false_neg']
+        try:
+            precision = true_positive/(true_positive+ false_positive)
+        except ZeroDivisionError:
+            precision=0.0
+        try:
+            recall = true_positive/(true_positive + false_negative)
+        except ZeroDivisionError:
+            recall=0.0
+    return (precision, recall)
+
+def calc_precision_recall_both_classes(image_results_sass, image_results_leet):
+    """Calculates precision and recall from the set of images
+    Args:
+        img_results (dict): dictionary formatted like:
+            {
+                'img_id1': {'true_pos': int, 'false_pos': int, 'false_neg': int},
+                'img_id2': ...
+                ...
+            }
+    Returns:
+        tuple: of floats of (precision, recall)
+    """
+    true_positive=0
+    false_positive=0
+    false_negative=0
+    for img_id, res in image_results_sass.items():
+        true_positive +=res['true_pos']
+        false_positive += res['false_pos']
+        false_negative += res['false_neg']
+        try:
+            precision = true_positive/(true_positive+ false_positive)
+        except ZeroDivisionError:
+            precision=0.0
+        try:
+            recall = true_positive/(true_positive + false_negative)
+        except ZeroDivisionError:
+            recall=0.0
+    for img_id, res in image_results_leet.items():
+        true_positive +=res['true_pos']
+        false_positive += res['false_pos']
+        false_negative += res['false_neg']
+        try:
+            precision = true_positive/(true_positive+ false_positive)
+        except ZeroDivisionError:
+            precision=0.0
+        try:
+            recall = true_positive/(true_positive + false_negative)
+        except ZeroDivisionError:
+            recall=0.0
+    return (precision, recall)
+
+
+def calc_f_score(precision_recall):
+    precision = precision_recall[0]
+    recall = precision_recall[1]
+    return 2 * precision * recall / (precision + recall)
 
 if __name__ == "__main__":
     yolo = YOLO()
     ground_truth = decipher_ground_truth()
-    for image_details in ground_truth:
-        try:
-            image = Image.open(image_details[0])
-        except:
-            print('cant open file ' + image_details[0])
-            continue
-        else:
+    precision_recalls = []
+    results_both_classes = []
+    for target_class in (0, 1):
+        results = {}
+        for image_details in ground_truth:
+            try:
+                image = Image.open(image_details[0])
+            except:
+                print('cant open file ' + image_details[0])
+                continue
             r_image, out_boxes, out_classes, out_scores = yolo.detect_image(image)
-            calculateResults(image_details, out_boxes, out_classes, out_scores)
-
+            results[image_details[0]] = calculateResults(image_details, out_boxes, out_classes, out_scores, target_class)
+        results_both_classes.append(results)
+        precision_recalls.append(calc_precision_recall(results))
+    fscores = [calc_f_score(precision_recall) for precision_recall in precision_recalls]
+    print('Macro average for F-score: ' + str(sum(fscores) / len(fscores)))
+    print('Micro average for F-score: ' + str(calc_f_score(calc_precision_recall_both_classes(results_both_classes[0], results_both_classes[1]))))
     yolo.close_session()
