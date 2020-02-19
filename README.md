@@ -37,7 +37,7 @@ Nakon kopiranja leet.mdl-a, potrebno je izbrisati stari mdl fajl, i preimenovati
 
 Za sas model se radi analogno, njegov model se prekopira u sledeće direktorijume: **gign**, **gsg9** i **urban**.
 
-## Korišcenje
+## Korišćenje
 
 Aplikacija se pokreće sa pozivom yolo_video.py fajla bez argumenata.
 
